@@ -3,6 +3,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+
+# For predictive analysis
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from scipy import stats
+from scipy.stats import ttest_ind
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import cross_val_score
+
+
 def merge_columns_with_conditions(df):
     def custom_merge(row):
         # Replace NaN with ';' and join using space
@@ -86,11 +98,53 @@ def visualization(data):
     plt.tight_layout()
     plt.show()
 
+def pred_analysis(data):
+    data = data.dropna()
+    data = data[(np.abs(stats.zscore(data.select_dtypes(include=[np.number]))) < 3).all(axis=1)]
+
+    # Feature engineering: Create a feature representing engagement rate
+    data['engagement_rate'] = (data['likes'] + data['shares'] + data['comments']) / data['views']
+
+    sns.pairplot(data)
+    plt.show()
+
+    # Correlation heatmap
+    sns.heatmap(data.corr(), annot=True)
+    plt.show()
+
+    # Assume we are comparing two groups
+    group1 = data[data['condition'] == 'A']
+    group2 = data[data['condition'] == 'B']
+    ttest_ind(group1['engagement_rate'], group2['engagement_rate'])
+
+    model = RandomForestRegressor()
+
+    X = data.drop('target_column', axis=1)  # Replace 'target_column' with your target variable
+    y = data['target_column']
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    model.fit(X_train, y_train)
+
+    #  Hyperparameter Tuning
+    parameters = {'n_estimators': [100, 200], 'max_depth': [10, 20]}
+    grid_search = GridSearchCV(model, parameters, cv=3)
+    grid_search.fit(X_train, y_train)
+
+    # Model testing
+    predictions = model.predict(X_test)
+    mse = mean_squared_error(y_test, predictions)
+    print(f"Mean Squared Error: {mse}")
+
+    # Cross-Validation
+    scores = cross_val_score(model, X, y, cv=5)
+    print(f"Cross-validated scores: {scores}")
+
 
 inpit_file_path = './100K FACEBOOK.xlsx'
 output_file_path = './cleaned_data.xlsx'
 cleaned_data = clean_data(inpit_file_path, output_file_path)
 visualization(cleaned_data)
+pred_analysis(cleaned_data)
 
 
 print("SCRIPT ENDED SUCCESSFULLY")
