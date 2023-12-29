@@ -2,17 +2,13 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+from datetime import datetime
 
 # For predictive analysis
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from scipy import stats
-from scipy.stats import ttest_ind
-from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import cross_val_score
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import classification_report, accuracy_score
+from sklearn.preprocessing import LabelEncoder
 
 
 def merge_columns_with_conditions(df):
@@ -98,53 +94,62 @@ def visualization(data):
     plt.tight_layout()
     plt.show()
 
+def calculate_age(birthday):
+    try:
+        birthday = datetime.strptime(birthday, '%A %B %d %Y')
+        today = datetime.now()
+        return today.year - birthday.year - ((today.month, today.day) < (birthday.month, birthday.day))
+    except:
+        return None 
+
 def pred_analysis(data):
-    data = data.dropna()
-    data = data[(np.abs(stats.zscore(data.select_dtypes(include=[np.number]))) < 3).all(axis=1)]
+    data['Age'] = data['Birthday'].apply(calculate_age)
 
-    # Feature engineering: Create a feature representing engagement rate
-    data['engagement_rate'] = (data['likes'] + data['shares'] + data['comments']) / data['views']
+    data = data.dropna(subset=['Age'])
 
-    sns.pairplot(data)
-    plt.show()
 
-    # Correlation heatmap
-    sns.heatmap(data.corr(), annot=True)
-    plt.show()
+    # Encode categorical variables
+    label_encoder = LabelEncoder()
+    data['Hometown_Encoded'] = label_encoder.fit_transform(data['Hometown'])
+    data['Country_Encoded'] = label_encoder.fit_transform(data['Country'])
 
-    # Assume we are comparing two groups
-    group1 = data[data['condition'] == 'A']
-    group2 = data[data['condition'] == 'B']
-    ttest_ind(group1['engagement_rate'], group2['engagement_rate'])
+    # Feature Engineering: Creating age groups
+    bins = [0, 18, 30, 40, 50, 60, 100]
+    labels = ['0-18', '19-30', '31-40', '41-50', '51-60', '60+']
+    data['Age_Group'] = pd.cut(data['Age'], bins=bins, labels=labels, right=False)
 
-    model = RandomForestRegressor()
+    # Selecting features and target for the model
+    features = ['Hometown_Encoded', 'Country_Encoded']
+    target = 'Age_Group'
 
-    X = data.drop('target_column', axis=1)  # Replace 'target_column' with your target variable
-    y = data['target_column']
+    # Handling missing values
+    data.dropna(subset=[target], inplace=True)
 
+    # Data Splitting
+    X = data[features]
+    y = data[target]
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Model Training
+    model = DecisionTreeClassifier()
     model.fit(X_train, y_train)
 
-    #  Hyperparameter Tuning
-    parameters = {'n_estimators': [100, 200], 'max_depth': [10, 20]}
-    grid_search = GridSearchCV(model, parameters, cv=3)
-    grid_search.fit(X_train, y_train)
+    # Model Evaluation
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    report = classification_report(y_test, y_pred)
 
-    # Model testing
-    predictions = model.predict(X_test)
-    mse = mean_squared_error(y_test, predictions)
-    print(f"Mean Squared Error: {mse}")
-
-    # Cross-Validation
-    scores = cross_val_score(model, X, y, cv=5)
-    print(f"Cross-validated scores: {scores}")
+    # Print the results
+    print("Model Accuracy:", accuracy)
+    print("Classification Report:\n", report)
 
 
-inpit_file_path = './100K FACEBOOK.xlsx'
+input_file_path = './100K FACEBOOK.xlsx'
 output_file_path = './cleaned_data.xlsx'
-cleaned_data = clean_data(inpit_file_path, output_file_path)
-visualization(cleaned_data)
+cleaned_data = clean_data(input_file_path, output_file_path)
 pred_analysis(cleaned_data)
+
+visualization(cleaned_data)
 
 
 print("SCRIPT ENDED SUCCESSFULLY")
